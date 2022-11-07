@@ -54,45 +54,47 @@ AHS-2 Medicare Linkage
 <!-- -->
 
     ## # A tibble: 2 × 3
-    ##   SEX_MATCH     n   pct
+    ##   DOB_MATCH     n   pct
     ##       <dbl> <int> <dbl>
-    ## 1         0   824  1.56
-    ## 2         1 51880 98.4
+    ## 1         0  3331  6.32
+    ## 2         1 49373 93.7
 
 ### Anomalies
 
 -   There were two BeneIDs that appeared twice in the crosswalk file.
-    -   Each of these BeneIDs have two different SSNs (reason unknown)
+    -   Each of these BeneIDs have two different SSNs (below shows only
+        the last 4 digits of SSN)
 
 <!-- -->
 
     ## # A tibble: 4 × 5
-    ##   ORIG_SSN  BENE_ID         SSN_MATCH SEX_MATCH DOB_MATCH
-    ##   <chr>     <chr>               <dbl>     <dbl>     <dbl>
-    ## 1 537325500 2222222jxjxjTHH         1         1         1
-    ## 2 540329017 2222222jxjxjTHH         1         0         0
-    ## 3 562369228 2222222T1T1y1Jf         1         1         1
-    ## 4 573383893 2222222T1T1y1Jf         1         0         0
+    ##   SSN_hidden BENE_ID         SSN_MATCH SEX_MATCH DOB_MATCH
+    ##   <chr>      <chr>               <dbl>     <dbl>     <dbl>
+    ## 1 5500       2222222jxjxjTHH         1         1         1
+    ## 2 9017       2222222jxjxjTHH         1         0         0
+    ## 3 9228       2222222T1T1y1Jf         1         1         1
+    ## 4 3893       2222222T1T1y1Jf         1         0         0
 
 -   There were 106 SSNs that appeared twice in the crosswalk file – see
     the firse several examples below
-    -   Each of these SSNs have two different BeneIDs (reason unknown)
+    -   Each of these SSNs have two different BeneIDs (below shows only
+        the last 4 digits of SSN)
 
 <!-- -->
 
     ## # A tibble: 212 × 5
-    ##    ORIG_SSN  BENE_ID         SSN_MATCH SEX_MATCH DOB_MATCH
-    ##    <chr>     <chr>               <dbl>     <dbl>     <dbl>
-    ##  1 015444697 2222222H1yyJxTJ         1         1         1
-    ##  2 015444697 222222jygfg2J2H         1         1         1
-    ##  3 055468398 222222J1jyyJxx1         1         1         1
-    ##  4 055468398 222222yfxHyTxTx         1         1         1
-    ##  5 058504196 222222JTf212ff2         1         1         1
-    ##  6 058504196 222222Jj2yTgj2j         1         1         1
-    ##  7 063322671 222222221yTTxJ2         1         1         1
-    ##  8 063322671 2222222g2gTyx2y         1         1         1
-    ##  9 076220132 22222222THxggHH         1         1         1
-    ## 10 076220132 2222222HgTJJJxj         1         1         1
+    ##    SSN_hidden BENE_ID         SSN_MATCH SEX_MATCH DOB_MATCH
+    ##    <chr>      <chr>               <dbl>     <dbl>     <dbl>
+    ##  1 4697       2222222H1yyJxTJ         1         1         1
+    ##  2 4697       222222jygfg2J2H         1         1         1
+    ##  3 8398       222222J1jyyJxx1         1         1         1
+    ##  4 8398       222222yfxHyTxTx         1         1         1
+    ##  5 4196       222222JTf212ff2         1         1         1
+    ##  6 4196       222222Jj2yTgj2j         1         1         1
+    ##  7 2671       222222221yTTxJ2         1         1         1
+    ##  8 2671       2222222g2gTyx2y         1         1         1
+    ##  9 0132       22222222THxggHH         1         1         1
+    ## 10 0132       2222222HgTJJJxj         1         1         1
     ## # … with 202 more rows
 
 -   For now, these BeneIDs were excluded (n = 212) for analysis below
@@ -164,10 +166,10 @@ AHS-2 Medicare Linkage
 <!-- -->
 
     ## # A tibble: 2 × 3
-    ##   SEX_IDENT_CD     n   pct
-    ##          <dbl> <int> <dbl>
-    ## 1            1 17109  36.2
-    ## 2            2 30183  63.8
+    ##   Dead      n   pct
+    ##   <fct> <int> <dbl>
+    ## 1 Alive 33070  69.9
+    ## 2 Dead  14222  30.1
 
 -   See the distribution of deaths by years:
 

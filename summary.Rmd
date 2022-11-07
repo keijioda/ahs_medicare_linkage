@@ -49,6 +49,7 @@ crosswalk %>%
   * How should we deal with these gender mismatches?
 
 ```{r xwalk_sex_match, echo = FALSE}
+# Gender mismatch -- 824 subjects (1.6%)
 crosswalk %>% 
   filter(SSN_MATCH == 1) %>% 
   group_by(SEX_MATCH) %>% 
@@ -60,17 +61,19 @@ crosswalk %>%
   * How should we deal with these DOB mismatches?
 
 ```{r xwalk_dob_match, echo = FALSE}
+# DOB mismatch -- 3331 subjects (6.3%)
 crosswalk %>% 
   filter(SSN_MATCH == 1) %>% 
-  group_by(SEX_MATCH) %>% 
+  group_by(DOB_MATCH) %>% 
   tally() %>% 
   mutate(pct = n / sum(n) * 100)
+
 ```
 
 ### Anomalies
 
 * There were two BeneIDs that appeared twice in the crosswalk file. 
-  * Each of these BeneIDs have two different SSNs (reason unknown)
+  * Each of these BeneIDs have two different SSNs (below shows only the last 4 digits of SSN)
 
 ```{r xwalk_beneID_duplicates, echo = FALSE}
 
@@ -84,11 +87,13 @@ dup_BENE_IDs <- all_matched_bene_ids %>%
   filter(n > 1)
 
 all_matched_bene_ids %>% 
-  filter(BENE_ID %in% dup_BENE_IDs$BENE_ID)
+  filter(BENE_ID %in% dup_BENE_IDs$BENE_ID) %>% 
+  mutate(SSN_hidden = substr(ORIG_SSN, 6, 10)) %>% 
+  select(SSN_hidden, BENE_ID, SSN_MATCH, SEX_MATCH, DOB_MATCH)
 ```
 
 * There were 106 SSNs that appeared twice in the crosswalk file -- see the firse several examples below
-  * Each of these SSNs have two different BeneIDs (reason unknown)
+  * Each of these SSNs have two different BeneIDs  (below shows only the last 4 digits of SSN)
 
 ```{r xwalk_ssn_duplicates, echo = FALSE}
 dup_SSNs <- all_matched_bene_ids %>% 
@@ -97,7 +102,9 @@ dup_SSNs <- all_matched_bene_ids %>%
   filter(n > 1)
 
 all_matched_bene_ids %>% 
-  filter(ORIG_SSN %in% dup_SSNs$ORIG_SSN)
+  filter(ORIG_SSN %in% dup_SSNs$ORIG_SSN) %>% 
+  mutate(SSN_hidden = substr(ORIG_SSN, 6, 10)) %>% 
+  select(SSN_hidden, BENE_ID, SSN_MATCH, SEX_MATCH, DOB_MATCH)
 ```
 
 * For now, these BeneIDs were excluded (n = 212) for analysis below
@@ -199,10 +206,12 @@ all_msbf_long %>%
 * How many of them died during 2008-2020? There were 14,222 (30.1%) deaths during the 13 years:
 
 ```{r msbf_deaths, echo = FALSE}
-all_msbf_long %>% 
+all_msbf_long %>%
   group_by(BENE_ID) %>% 
   slice(n()) %>% 
-  group_by(SEX_IDENT_CD) %>% 
+  mutate(Dead = ifelse(is.na(BENE_DEATH_DT), 0, 1),
+         Dead = factor(Dead, levels = 0:1, labels = c("Alive", "Dead"))) %>% 
+  group_by(Dead) %>% 
   tally() %>% 
   mutate(pct = n / sum(n) * 100)
 ```
