@@ -1,51 +1,82 @@
+---
+title: "AHS-2 Medicare Linkage"
+output: github_document
+---
 
+```{r setup, include=FALSE}
 # Required libraries
 pacs <- c("tidyverse", "readxl", "lubridate", "tableone")
 sapply(pacs, require, character.only = TRUE)
+```
 
+## Datasets 
+
+* Data received from CMS on October 31, 2022
+* Contains 4 self-decrypting EXE files for each year of 2008-2020
+  * Master Beneficiary Summary File (MBSFABCD)
+  * Chronic Conditions (MBSFCC)
+  * Cost and Utilization (MBSFCU)
+  * MEDPAR (MEDP)
+* For 2017 and later, we have:
+  * An additional file for a new set of 30 chronic conditions (MBSFCHRONIC)
+* Also includes a crosswalk file between SSN and BeneID
+
+## Crosswalk
+### SSN matches
+
+```{r read_xwalk, echo = FALSE, message = FALSE}
 # Read crosswalk file: n = 70.968
 crosswalk <- read_fwf("./Data/12172/2022/ssn_bene_xwalk_res000058038_req012172_2022.dat",
                       fwf_widths(c(9, 15, 1, 1, 1), c("ORIG_SSN", "BENE_ID", "SSN_MATCH", "SEX_MATCH", "DOB_MATCH")))
+```
 
-nrow(crosswalk)
-summary(crosswalk)
+* The crosswalk file contains `r nrow(crosswalk)` SSNs (``ORIG_SSN``).
+* There are 3 matching indicators:
+  * ``SSN_MATCH`` for SSN-to-BeneID match
+  * and whenever there is a match, we also have ``SEX_MATCH``, and ``DOB_MATCH``
+  
+* Among 70,968 subjects, there were 52,704 matches (74%):
+  * There were 115 invalid SSNs (``SSN_MATCH = 9``)
 
-crosswalk %>% 
-  split(.$SSN_MATCH)
-
-# How many matches? -- 52,704 subjects (74%)
-table(crosswalk$SSN_MATCH)
-
-# There were 115 invalid SSN
+```{r xwalk_ssn_match, echo = FALSE}
 crosswalk %>% 
   group_by(SSN_MATCH) %>% 
   tally() %>% 
   mutate(pct = n / sum(n) * 100)
+```
 
-# Gender mismatch -- 824 subjects (1.6%)
+* Among 52,704 matches, there were 824 subjects (1.6%) whose gender mismatched with AHS-2 data
+  * How should we deal with these gender mismatches?
+
+```{r xwalk_sex_match, echo = FALSE}
 crosswalk %>% 
   filter(SSN_MATCH == 1) %>% 
   group_by(SEX_MATCH) %>% 
   tally() %>% 
   mutate(pct = n / sum(n) * 100)
+```
 
-# DOB mismatch -- 3331 subjects (6.3%)
+* Among 52,704 matches, there were 3331 subjects (6.3%) whose DOB mismatched with AHS-2 data
+  * How should we deal with these DOB mismatches?
+
+```{r xwalk_dob_match, echo = FALSE}
 crosswalk %>% 
   filter(SSN_MATCH == 1) %>% 
-  group_by(DOB_MATCH) %>% 
+  group_by(SEX_MATCH) %>% 
   tally() %>% 
   mutate(pct = n / sum(n) * 100)
+```
+
+### Anomalies
+
+* There were two BeneIDs that appeared twice in the crosswalk file. 
+  * Each of these BeneIDs have two different SSNs (reason unknown)
+
+```{r xwalk_beneID_duplicates, echo = FALSE}
 
 # Extract matched BENE_IDs
 all_matched_bene_ids <- crosswalk %>% 
   filter(SSN_MATCH == 1) 
-
-summary(all_matched_bene_ids)
-nrow(all_matched_bene_ids)
-
-# There are two duplicates in BENE_IDs...
-all_matched_bene_ids %>% 
-  summarize(n = n_distinct(BENE_ID))
 
 dup_BENE_IDs <- all_matched_bene_ids %>% 
   group_by(BENE_ID) %>% 
@@ -54,11 +85,12 @@ dup_BENE_IDs <- all_matched_bene_ids %>%
 
 all_matched_bene_ids %>% 
   filter(BENE_ID %in% dup_BENE_IDs$BENE_ID)
+```
 
-# There are 106 SSN duplicates ???
-all_matched_bene_ids %>% 
-  summarize(n = n_distinct(ORIG_SSN))
+* There were 106 SSNs that appeared twice in the crosswalk file -- see the firse several examples below
+  * Each of these SSNs have two different BeneIDs (reason unknown)
 
+```{r xwalk_ssn_duplicates, echo = FALSE}
 dup_SSNs <- all_matched_bene_ids %>% 
   group_by(ORIG_SSN) %>% 
   summarize(n = sum(n())) %>% 
@@ -66,7 +98,11 @@ dup_SSNs <- all_matched_bene_ids %>%
 
 all_matched_bene_ids %>% 
   filter(ORIG_SSN %in% dup_SSNs$ORIG_SSN)
+```
 
+* For now, these BeneIDs were excluded (n = 212) for analysis below
+
+```{r exclude_beneids, echo = FALSE, message = FALSE}
 # Remove these BENE_IDs
 exclude_BENE_IDs <- dup_BENE_IDs %>% 
   select(BENE_ID) %>% 
@@ -74,13 +110,14 @@ exclude_BENE_IDs <- dup_BENE_IDs %>%
               filter(ORIG_SSN %in% dup_SSNs$ORIG_SSN) %>% 
               select(BENE_ID)
   )
-  
-length(unique(exclude_BENE_IDs$BENE_ID))
+```
 
+## Master Beneficiary Summary (MBSF) File
+
+```{r read_msbf, echo = FALSE, message = FALSE}
 # Read MBSF Summary data on each year
 # Data specification of MSBF files
 fts_msbf <- read_excel("./Data/mbsf_format.xlsx")
-fts_msbf
 
 # Create file names
 year <- 2008:2020
@@ -91,44 +128,39 @@ all_msbf <- fname %>%
   lapply(\(x) read_fwf(x, fwf_widths(fts_msbf$length, fts_msbf$long_name))) %>% 
   lapply(\(x) anti_join(x, exclude_BENE_IDs)) %>% 
   setNames(year)
+```
 
+* All MBSF files of 2008-2020 were imported into R. After excluding duplicated cases described above, the number of observations each year is:
+
+```{r msbf_nobs, echo = FALSE}
 all_msbf %>% sapply(nrow)
+```
 
+```{r msbf_long, echo = FALSE, message = FALSE}
 # Long format over years
 all_msbf_long <- all_msbf %>% 
   do.call(rbind, .) %>% 
   arrange(BENE_ID, BENE_ENROLLMT_REF_YR)
-
-# Num of beneficiaries each year
-all_msbf_long %>% 
-  group_by(BENE_ENROLLMT_REF_YR) %>% 
-  tally()
-
-all_msbf_long %>% 
-  group_by(BENE_ENROLLMT_REF_YR) %>% 
-  tally() %>% 
-  ggplot(aes(x = BENE_ENROLLMT_REF_YR, y = n)) + geom_bar(stat = "identity")
 
 # Unique beneficiaries across years: n = 47,292
 all_msbf_bene_ids <- all_msbf_long %>% 
   select(BENE_ID) %>% 
   distinct()
 
-nrow(all_msbf_bene_ids)
-
-all_msbf_bene_ids %>% 
-  left_join(crosswalk, by = "BENE_ID")
-
 # 5198 matched beneficiaries were never appeared in MSBF files
 bene_ids_no_show <- all_matched_bene_ids %>% 
   anti_join(exclude_BENE_IDs) %>% 
   anti_join(all_msbf_bene_ids)
+```
 
-nrow(bene_ids_no_show)
+* After combining all years of data, we have 47,292 unique BeneIDs in these 13 years.
+  * This indicates that there are `r nrow(bene_ids_no_show)` matched beneficiaries that do not appear in the MSBF files.
 
-all_msbf %>% 
-  lapply(inner_join, y = bene_ids_no_show)
+### Age, gender and deaths
 
+* See the distribution of age at last seen. Notice the beneficiaries of aged <60 years.
+
+```{r msbf_age_dist, echo = FALSE}
 # Age at the last year of appearance
 all_msbf_long %>% 
   group_by(BENE_ID) %>% 
@@ -137,7 +169,11 @@ all_msbf_long %>%
   group_by(AgeCat) %>% 
   tally() %>% 
   mutate(pct = n / sum(n) * 100)
+```
 
+* Current reason for Medicare entitlement (at last seen) indicates that 3.6% of all beneficiaries are because of disability and/or end-stage renal disease:
+
+```{r msbf_entitle, echo = FALSE}
 # Current Reason for Entitlement Code
 all_msbf_long %>% 
   group_by(BENE_ID) %>% 
@@ -146,26 +182,34 @@ all_msbf_long %>%
   group_by(ENTLMT_RSN_CURR) %>% 
   tally() %>% 
   mutate(pct = n / sum(n) * 100)
+```
 
-# Sex/race at the last year of appearance
+* See the distribution of sex according to the year last seen:
+
+```{r msbf_sex_dist, echo = FALSE}
+# Sex at the last year of appearance
 all_msbf_long %>% 
   group_by(BENE_ID) %>% 
   slice(n()) %>% 
   group_by(SEX_IDENT_CD) %>% 
   tally() %>% 
   mutate(pct = n / sum(n) * 100)
+```
 
-# How many died during 2008-2020
-# 14222 (30.1%) died
-all_msbf_long %>%
+* How many of them died during 2008-2020? There were 14,222 (30.1%) deaths during the 13 years:
+
+```{r msbf_deaths, echo = FALSE}
+all_msbf_long %>% 
   group_by(BENE_ID) %>% 
   slice(n()) %>% 
-  mutate(Dead = ifelse(is.na(BENE_DEATH_DT), 0, 1),
-         Dead = factor(Dead, levels = 0:1, labels = c("Alive", "Dead"))) %>% 
-  group_by(Dead) %>% 
+  group_by(SEX_IDENT_CD) %>% 
   tally() %>% 
   mutate(pct = n / sum(n) * 100)
+```
 
+* See the distribution of deaths by years:
+
+```{r msbf_deaths_dist, echo = FALSE}
 all_msbf_long %>%
   group_by(BENE_ID) %>% 
   slice(n()) %>% 
@@ -173,11 +217,14 @@ all_msbf_long %>%
   group_by(year_died) %>% 
   tally() %>% 
   mutate(pct = n / sum(n) * 100)
+```
 
+## Chronic condition data
+
+```{r read_cc, echo = FALSE, message = FALSE}
 # Read chronic conditions data on each year
 # Data specification of MSBF files
 fts_cc <- read_excel("./Data/mbsf_cc_format.xlsx")
-fts_cc
 
 # Create file names
 fname <- paste0("./Data/12172/", year, "/mbsf_cc_summary_res000058038_req012172_", year, ".dat")
@@ -192,70 +239,13 @@ all_cc <- fname %>%
 all_cc_long <- all_cc %>% 
   do.call(rbind, .) %>% 
   arrange(BENE_ID, BENE_ENROLLMT_REF_YR)
+```
 
-# Num of beneficiaries each year
-all_cc_long %>% 
-  group_by(BENE_ENROLLMT_REF_YR) %>% 
-  tally()
+* All chronic condition files of 2008-2020 were imported into R. After excluding duplicated cases described above, we have the same number of observations as in the MSBF file (n = 47,292 unique BeneIDs).
+* CC files were merged with MSBF to identify Alzheimer's disease and related dementia cases based on ``ALZH_DEMEN_EVER``: the date when the beneficiary first met the criteria for the disease (after 1999)
+  * Among 47,292 subjects, there were 8685 cases (18.4%) of Alzheimer/dementia cases
 
-# Unique beneficiaries across years: n = 47,292
-all_cc_bene_ids <- all_cc_long %>% 
-  select(BENE_ID) %>% 
-  distinct()
-
-nrow(all_cc_bene_ids)
-
-# Alzheimer/dementia status at the last year of appearance
-# Alzheimer only: n = 3607
-all_cc_long %>% 
-  mutate(ALZH_YN    = ifelse(is.na(ALZH_EVER), 0, 1)) %>% 
-  group_by(BENE_ID) %>% 
-  slice(n()) %>% 
-  group_by(ALZH_YN) %>% 
-  tally() %>% 
-  mutate(pct = n / sum(n) * 100) 
-
-# Alzheimer/dementia: n = 8685
-all_cc_long %>% 
-  mutate(ALZH_DEMEN_YN = ifelse(is.na(ALZH_DEMEN_EVER), 0, 1)) %>% 
-  group_by(BENE_ID) %>% 
-  slice(n()) %>% 
-  group_by(ALZH_DEMEN_YN) %>% 
-  tally() %>% 
-  mutate(pct = n / sum(n) * 100) 
-
-# Both Alzheimer and dementia: n = 8685
-all_cc_long %>% 
-  mutate(ALZH_DEMEN_YN = ifelse(is.na(ALZH_DEMEN_EVER) & is.na(ALZH_EVER), 0, 1)) %>% 
-  group_by(BENE_ID) %>% 
-  slice(n()) %>% 
-  group_by(ALZH_DEMEN_YN) %>% 
-  tally() %>% 
-  mutate(pct = n / sum(n) * 100) 
-
-# Year of Alzheimer/dementia diagnosis at the last year of appearance
-# Alzheimer only
-all_cc_long %>% 
-  filter(!is.na(ALZH_EVER)) %>% 
-  mutate(ALZH_DX_YR = substr(ALZH_EVER, 1, 4)) %>% 
-  group_by(BENE_ID) %>% 
-  slice(n()) %>% 
-  group_by(ALZH_DX_YR) %>% 
-  tally() %>% 
-  mutate(pct = n / sum(n) * 100) %>% 
-  print(n = Inf)
-
-# Both Alzheimer and dementia
-all_cc_long %>% 
-  filter(!is.na(ALZH_DEMEN_EVER)) %>% 
-  mutate(ALZH_DEMEN_DX_YR = substr(ALZH_DEMEN_EVER, 1, 4)) %>% 
-  group_by(BENE_ID) %>% 
-  slice(n()) %>% 
-  group_by(ALZH_DEMEN_DX_YR) %>% 
-  tally() %>% 
-  mutate(pct = n / sum(n) * 100) %>% 
-  print(n = Inf)
-
+```{r alz_cases, echo = FALSE}
 # Generate data for demographic table
 RTI_labels <- c("Unknown", "NH-White", "Black", "Other", "Asian", "Hispanic", "Native")
 stop_date  <- as.Date("2008-12-31")
@@ -281,45 +271,45 @@ cc_alzh <- all_cc_long %>%
   slice(n()) %>%
   select(BENE_ID, ALZH_DEMEN_YN, ALZH_EVER, ALZH_DEMEN_EVER)
 
-# Demographic table
 cc_alzh %>% 
   group_by(ALZH_DEMEN_YN) %>% 
   tally() %>% 
   mutate(pct = n / sum(n) * 100)
+```
 
+* Number of diagnosis by year
+  * Notice that some of these cases are prevalent cases before the AHS-2 baseline questionnaire
+
+```{r alz_years, echo = FALSE}
+all_cc_long %>% 
+  filter(!is.na(ALZH_DEMEN_EVER)) %>% 
+  mutate(ALZH_DEMEN_DX_YR = substr(ALZH_DEMEN_EVER, 1, 4)) %>% 
+  group_by(BENE_ID) %>% 
+  slice(n()) %>% 
+  group_by(ALZH_DEMEN_DX_YR) %>% 
+  tally() %>% 
+  mutate(pct = n / sum(n) * 100) %>% 
+  print(n = Inf)
+```
+
+## Descriptive tables
+
+### Overall
+```{r descriptive_all, echo = FALSE}
 msbf_demog %>% 
   left_join(cc_alzh, by = "BENE_ID") %>% 
   CreateTableOne(vars = c("SEX_IDENT_CD", "Age_2008", "RTI_RACE_CD", "Dead"), data = .) %>% 
-  print(showAllLevels = TRUE)
+  print(showAllLevels = TRUE) %>% 
+  kableone()
+```
 
+### Stratified by Alzheimer/dementia cases
+
+```{r descriptive_stratified, echo = FALSE}
 msbf_demog %>% 
   left_join(cc_alzh, by = "BENE_ID") %>% 
   CreateTableOne(strata = "ALZH_DEMEN_YN", vars = c("SEX_IDENT_CD", "Age_2008", "RTI_RACE_CD", "Dead"), data = .) %>% 
-  print(showAllLevels = TRUE)
+  print(showAllLevels = TRUE) %>% 
+  kableone()
+```
 
-msbf_demog %>% 
-  group_by(AgeCat_2008) %>% 
-  tally() %>% 
-  mutate(pct = n / sum(n) * 100)
-
-msbf_demog %>% 
-  mutate(ENTLMT_RSN_CURR = factor(ENTLMT_RSN_CURR, levels = 0:3, labels = c("OASI", "DIB", "ESRD", "DIB & ESRD"))) %>% 
-  group_by(ENTLMT_RSN_CURR) %>% 
-  tally() %>% 
-  mutate(pct = n / sum(n) * 100)
-
-msbf_demog %>% 
-  filter(ENTLMT_RSN_CURR > 1) %>% 
-  select(BENE_ID, AGE_AT_END_REF_YR, ENTLMT_RSN_ORIG, ENTLMT_RSN_CURR)
-
-msbf_demog %>% 
-  group_by(Dead) %>% 
-  tally() %>% 
-  mutate(pct = n / sum(n) * 100)
-
-# Need to decide what to do with:
-  # Gender mismatch
-  # DOB mismatch
-  # SSN duplicates -- more than one SSN is associated with a BENE_ID
-  # BENE_ID duplicates -- more than one BENE_ID is associated with a SSN
-  # Young Medicare beneficiaries with disabilities and/or ESRD
