@@ -36,13 +36,28 @@ crosswalk %>%
   tally() %>% 
   mutate(pct = n / sum(n) * 100)
 
+# How many have both gender and DOB mismatch -- 787 subjects (1.5%)
+crosswalk %>% 
+  filter(SSN_MATCH == 1, SEX_MATCH == 0, DOB_MATCH == 0) %>%
+  nrow()
+
+# How many have either gender OR DOB mismatch -- 3368 subjects (6.4%)
+crosswalk %>% 
+  filter(SSN_MATCH == 1 & (SEX_MATCH == 0 | DOB_MATCH == 0)) %>%
+  nrow()
+
 # Extract matched BENE_IDs
 all_matched_bene_ids <- crosswalk %>% 
-  filter(SSN_MATCH == 1) 
+  filter(SSN_MATCH == 1)
 
 summary(all_matched_bene_ids)
 nrow(all_matched_bene_ids)
 
+# BENE_IDs of gender or DOB mismatch (to be removed)
+mismatches <- crosswalk %>% 
+  filter(SSN_MATCH == 1 & (SEX_MATCH == 0 | DOB_MATCH == 0)) %>%
+  select(BENE_ID)
+  
 # There are two duplicates in BENE_IDs...
 all_matched_bene_ids %>% 
   summarize(n = n_distinct(BENE_ID))
@@ -67,14 +82,18 @@ dup_SSNs <- all_matched_bene_ids %>%
 all_matched_bene_ids %>% 
   filter(ORIG_SSN %in% dup_SSNs$ORIG_SSN)
 
-# Remove these BENE_IDs
+# BENE_IDs that need to be removed:
+# Gender/DOB mismatch
+# SSN/BENE_ID duplicates
 exclude_BENE_IDs <- dup_BENE_IDs %>% 
   select(BENE_ID) %>% 
   union(all_matched_bene_ids %>% 
-              filter(ORIG_SSN %in% dup_SSNs$ORIG_SSN) %>% 
-              select(BENE_ID)
-  )
-  
+          filter(ORIG_SSN %in% dup_SSNs$ORIG_SSN) %>% 
+          select(BENE_ID)
+  ) %>% 
+  union(mismatches)
+
+# 3571 BENE_IDs to be removed
 length(unique(exclude_BENE_IDs$BENE_ID))
 
 # Read MBSF Summary data on each year
@@ -109,7 +128,7 @@ all_msbf_long %>%
   tally() %>% 
   ggplot(aes(x = BENE_ENROLLMT_REF_YR, y = n)) + geom_bar(stat = "identity")
 
-# Unique beneficiaries across years: n = 47,292
+# Unique beneficiaries across years: n = 44,585
 all_msbf_bene_ids <- all_msbf_long %>% 
   select(BENE_ID) %>% 
   distinct()
@@ -119,7 +138,7 @@ nrow(all_msbf_bene_ids)
 all_msbf_bene_ids %>% 
   left_join(crosswalk, by = "BENE_ID")
 
-# 5198 matched beneficiaries were never appeared in MSBF files
+# 4546 matched beneficiaries were never appeared in MSBF files
 bene_ids_no_show <- all_matched_bene_ids %>% 
   anti_join(exclude_BENE_IDs) %>% 
   anti_join(all_msbf_bene_ids)
@@ -156,7 +175,7 @@ all_msbf_long %>%
   mutate(pct = n / sum(n) * 100)
 
 # How many died during 2008-2020
-# 14222 (30.1%) died
+# 13,218 (29.6%) died
 all_msbf_long %>%
   group_by(BENE_ID) %>% 
   slice(n()) %>% 
@@ -165,6 +184,12 @@ all_msbf_long %>%
   group_by(Dead) %>% 
   tally() %>% 
   mutate(pct = n / sum(n) * 100)
+
+# N deaths = 13,218
+n_deaths <- all_msbf_long %>%
+  group_by(BENE_ID) %>% 
+  slice(n()) %>% 
+  filter(!is.na(BENE_DEATH_DT)) %>% nrow()
 
 all_msbf_long %>%
   group_by(BENE_ID) %>% 
@@ -175,11 +200,12 @@ all_msbf_long %>%
   mutate(pct = n / sum(n) * 100)
 
 # Read chronic conditions data on each year
-# Data specification of MSBF files
+# Data specification of CC files
 fts_cc <- read_excel("./Data/mbsf_cc_format.xlsx")
 fts_cc
 
 # Create file names
+year <- 2008:2020
 fname <- paste0("./Data/12172/", year, "/mbsf_cc_summary_res000058038_req012172_", year, ".dat")
 
 # Read all MSBF files of 13 years
@@ -198,7 +224,7 @@ all_cc_long %>%
   group_by(BENE_ENROLLMT_REF_YR) %>% 
   tally()
 
-# Unique beneficiaries across years: n = 47,292
+# Unique beneficiaries across years: n = 44,585
 all_cc_bene_ids <- all_cc_long %>% 
   select(BENE_ID) %>% 
   distinct()
@@ -206,7 +232,7 @@ all_cc_bene_ids <- all_cc_long %>%
 nrow(all_cc_bene_ids)
 
 # Alzheimer/dementia status at the last year of appearance
-# Alzheimer only: n = 3607
+# Alzheimer only: n = 3356
 all_cc_long %>% 
   mutate(ALZH_YN    = ifelse(is.na(ALZH_EVER), 0, 1)) %>% 
   group_by(BENE_ID) %>% 
@@ -215,7 +241,7 @@ all_cc_long %>%
   tally() %>% 
   mutate(pct = n / sum(n) * 100) 
 
-# Alzheimer/dementia: n = 8685
+# Alzheimer/dementia: n = 8074
 all_cc_long %>% 
   mutate(ALZH_DEMEN_YN = ifelse(is.na(ALZH_DEMEN_EVER), 0, 1)) %>% 
   group_by(BENE_ID) %>% 
@@ -224,7 +250,7 @@ all_cc_long %>%
   tally() %>% 
   mutate(pct = n / sum(n) * 100) 
 
-# Both Alzheimer and dementia: n = 8685
+# Both Alzheimer and dementia: n = 8074
 all_cc_long %>% 
   mutate(ALZH_DEMEN_YN = ifelse(is.na(ALZH_DEMEN_EVER) & is.na(ALZH_EVER), 0, 1)) %>% 
   group_by(BENE_ID) %>% 
@@ -323,3 +349,70 @@ msbf_demog %>%
   # SSN duplicates -- more than one SSN is associated with a BENE_ID
   # BENE_ID duplicates -- more than one BENE_ID is associated with a SSN
   # Young Medicare beneficiaries with disabilities and/or ESRD
+
+# Read Cost Use data on each year
+# Data specification of CU files
+fts_cu <- read_excel("./Data/mbsf_cu_format.xlsx")
+fts_cu
+
+# Create file names
+year <- 2008:2020
+fname <- paste0("./Data/12172/", year, "/mbsf_costuse_res000058038_req012172_", year, ".dat")
+
+# Read all MSBF files of 13 years
+all_cu <- fname %>% 
+  lapply(\(x) read_fwf(x, fwf_widths(as.integer(fts_cu$length), fts_cu$long_name))) %>% 
+  lapply(\(x) anti_join(x, exclude_BENE_IDs)) %>% 
+  setNames(year)
+
+# Long format over years
+all_cu_long <- all_cu %>% 
+  do.call(rbind, .) %>% 
+  arrange(BENE_ID, BENE_ENROLLMT_REF_YR)
+
+# Num of beneficiaries each year
+all_cu_long %>% 
+  group_by(BENE_ENROLLMT_REF_YR) %>% 
+  tally()
+
+# Unique beneficiaries across years: n = 44,585
+all_cu_bene_ids <- all_cu_long %>% 
+  select(BENE_ID) %>% 
+  distinct()
+
+nrow(all_cu_bene_ids)
+
+# Read MEDPAR data on each year
+# Data specification of MEDPAR files
+fts_mp <- read_excel("./Data/mbsf_mp_format.xlsx")
+fts_mp
+
+# Create file names
+year <- 2008:2020
+fname <- paste0("./Data/12172/", year, "/medpar_all_file_res000058038_req012172_", year, ".dat")
+
+# Read all MSBF files of 13 years
+all_mp <- fname %>% 
+  lapply(\(x) read_fwf(x, fwf_widths(fts_mp$length, fts_mp$long_name))) %>% 
+  lapply(\(x) anti_join(x, exclude_BENE_IDs)) %>% 
+  setNames(year)
+
+# Long format over years
+all_mp_long <- all_mp %>% 
+  do.call(rbind, .) %>% 
+  arrange(BENE_ID, MEDPAR_YR_NUM)
+
+# Num of beneficiaries each year
+all_mp_long %>% 
+  group_by(MEDPAR_YR_NUM) %>% 
+  tally()
+
+# Unique beneficiaries across years: n = 25,125
+all_mp_bene_ids <- all_mp_long %>% 
+  select(BENE_ID) %>% 
+  distinct()
+
+nrow(all_mp_bene_ids)
+
+all_mp_bene_ids %>% inner_join(bene_ids_no_show) %>% nrow()
+all_mp_bene_ids %>% inner_join(all_msbf_bene_ids) %>% nrow()
