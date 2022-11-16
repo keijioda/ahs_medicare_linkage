@@ -105,8 +105,8 @@ AHS-2 Medicare Linkage
 ## Master Beneficiary Summary (MBSF) File
 
 - All MBSF files of 2008-2020 were imported into R. After excluding
-  duplicated cases described above, the number of observations each year
-  is:
+  duplicated cases and gender- or DOB mismatch cases described above,
+  the number of observations each year is:
 
 <!-- -->
 
@@ -198,8 +198,9 @@ AHS-2 Medicare Linkage
 ## Chronic condition data
 
 - All chronic condition files of 2008-2020 were imported into R. After
-  excluding duplicated cases described above, we have the same number of
-  observations as in the MSBF file (n = 44,585 unique BeneIDs).
+  excluding duplicated cases and gender- or DOB mismatch cases, we have
+  the same number of observations as in the MSBF file (n = 44,585 unique
+  BeneIDs).
 - CC files were merged with MSBF to identify Alzheimer’s disease and
   related dementia cases based on `ALZH_DEMEN_EVER`: the date when the
   beneficiary first met the criteria for the disease (after 1999)
@@ -287,12 +288,13 @@ AHS-2 Medicare Linkage
 ## Cost and utilization data
 
 - All CU files of 2008-2020 were imported into R. After excluding
-  duplicated cases described above, we have the same number of
-  observations as in the MSBF file (n = 44,585 unique BeneIDs).
+  duplicated cases and gender- or DOB mismatch cases, we have the same
+  number of observations as in the MSBF file (n = 44,585 unique
+  BeneIDs).
 
 ## MedPAR (Medicare provider analysis and review) data
 
 - All MedPAR files of 2008-2020 were imported into R. After excluding
-  duplicated cases described above, there are n = 25,125 unique BeneIDs
-  during 13 years.
+  duplicated cases and gender- or DOB mismatch cases, there are n =
+  25,125 unique BeneIDs during 13 years.
   - All of these BeneIDs do appear in the MSBF file.

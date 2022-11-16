@@ -145,7 +145,7 @@ all_msbf <- fname %>%
   setNames(year)
 ```
 
-* All MBSF files of 2008-2020 were imported into R. After excluding duplicated cases described above, the number of observations each year is:
+* All MBSF files of 2008-2020 were imported into R. After excluding duplicated cases and gender- or DOB mismatch cases described above, the number of observations each year is:
 
 ```{r msbf_nobs, echo = FALSE}
 all_msbf %>% sapply(nrow)
@@ -258,7 +258,7 @@ all_cc_long <- all_cc %>%
   arrange(BENE_ID, BENE_ENROLLMT_REF_YR)
 ```
 
-* All chronic condition files of 2008-2020 were imported into R. After excluding duplicated cases described above, we have the same number of observations as in the MSBF file (n = 44,585 unique BeneIDs).
+* All chronic condition files of 2008-2020 were imported into R. After excluding duplicated cases and gender- or DOB mismatch cases, we have the same number of observations as in the MSBF file (n = 44,585 unique BeneIDs).
 * CC files were merged with MSBF to identify Alzheimer's disease and related dementia cases based on ``ALZH_DEMEN_EVER``: the date when the beneficiary first met the criteria for the disease (after 1999)
   * Among 44,585 subjects, there were 8074 cases (18.1%) of Alzheimer/dementia cases
 
@@ -357,7 +357,7 @@ all_cu_bene_ids <- all_cu_long %>%
   distinct()
 ```
 
-* All CU files of 2008-2020 were imported into R. After excluding duplicated cases described above, we have the same number of observations as in the MSBF file (n = 44,585 unique BeneIDs).
+* All CU files of 2008-2020 were imported into R. After excluding duplicated cases and gender- or DOB mismatch cases, we have the same number of observations as in the MSBF file (n = 44,585 unique BeneIDs).
 
 ## MedPAR (Medicare provider analysis and review) data
 
@@ -386,5 +386,5 @@ all_mp_bene_ids <- all_mp_long %>%
   distinct()
 ```
 
-* All MedPAR files of 2008-2020 were imported into R. After excluding duplicated cases described above, there are n = 25,125 unique BeneIDs during 13 years.
+* All MedPAR files of 2008-2020 were imported into R. After excluding duplicated cases and gender- or DOB mismatch cases, there are n = 25,125 unique BeneIDs during 13 years.
   * All of these BeneIDs do appear in the MSBF file.
